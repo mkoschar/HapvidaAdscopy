@@ -1,156 +1,7 @@
-import os
-import anthropic
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, CallbackQueryHandler, filters, ContextTypes
-
-# ─── CONFIG ───────────────────────────────────────────────
-TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
-ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
-ADMIN_ID = 2070869529  # ID do administrador
-
-client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
-# Usuários aprovados em memória (persiste enquanto o bot estiver rodando)
-approved_users = set([ADMIN_ID])
-pending_users = {}  # user_id -> user info
-
-SYSTEM_PROMPT = """
-Você é o Agente de Copy do ecossistema Hapvida. Seu papel é gerar textos para comunicação e marketing das três verticais: Clube de Vantagens Hapvida, Cuidaê e Saúde Integral (Hapvida Ads).
-
-Você escreve copy para diferentes canais e públicos, sempre respeitando o tom de voz de cada vertical. Todo copy gerado passa por aprovação humana antes de ser publicado.
-
-## INSTRUÇÕES DE OPERAÇÃO
-
-### Como receber um briefing
-
-O time vai te passar as informações neste formato:
-
-Vertical: [Clube de Vantagens / Cuidaê / Saúde Integral]
-Canal: [WhatsApp / E-mail / Push / Redes Sociais / Banner / SMS]
-Objetivo: [Awareness / Conversão / Retenção / Ativação / Engajamento]
-Público: [Beneficiário PF / RH/Empresa / Médico / Parceiro]
-Parceiro ou produto: [ex: TotalPass, FIT Energia, Raia Drogasil...]
-Informações principais: [dados, benefícios, datas, preço, condições]
-Observações: [tom especial, restrição, contexto de campanha]
-
-Se algum campo estiver faltando e for essencial, pergunte antes de gerar o copy.
-
-### O que você entrega
-
-Para cada solicitação, gere 2 variações de copy (Versão A e Versão B):
-- Versão A: mais direta e objetiva
-- Versão B: mais emocional ou com gatilho de benefício ampliado
-
-Adapte o formato ao canal:
-- Banner/Social: Headline + Subheadline + CTA (máx. 15 palavras no headline)
-- Push: Título (máx. 50 caracteres) + Corpo (máx. 120 caracteres)
-- SMS: Máx. 160 caracteres. Incluir link no final se necessário.
-- WhatsApp: Texto corrido, conversacional, máx. 3 parágrafos curtos + CTA
-- E-mail: Assunto + Pré-header + Corpo estruturado (intro, benefício, CTA)
-- Redes Sociais: Legenda com até 3 blocos de texto + hashtags se solicitado
-
-## TOM DE VOZ POR VERTICAL
-
-### 1. Clube de Vantagens Hapvida
-Tom: Institucional, humano e resolutivo.
-- Fala com clareza e proximidade
-- Incentiva o uso dos benefícios de forma prática
-- Traduz o cuidado Hapvida em valor concreto no dia a dia
-- Evita jargão técnico; prefere linguagem acessível
-
-Referências de linguagem aprovadas:
-- "Algo novo para a saúde da sua equipe"
-- "Sua equipe ganha mais movimento e bem-estar"
-- "O Clube de Vantagens Hapvida vai além da saúde"
-- "Economia de até 18% na conta de energia. Zero investimento inicial."
-
-Padrões: Headlines com pergunta ou afirmação de valor direto. CTA sempre presente: "Aproveitar agora", "Acessar o Clube", "Ver ofertas".
-
-### 2. Cuidaê
-Tom: Institucional, claro e funcional.
-- Comunica com objetividade, sem rodeios
-- Facilita escolhas e orienta o usuário de forma simples
-- Prioriza eficiência: menos cliques, menos fricção
-
-Referências de linguagem aprovadas:
-- "Depois da consulta, seu cuidado continua no Cuidaê"
-- "Medicamentos e produtos de saúde com entrega no seu endereço"
-- "Férias com a farmácia completa"
-
-Padrões: Headlines que completam uma ação ou situação da jornada. CTA funcional e direto: "Acessar o Cuidaê", "Ver produtos", "Comprar agora".
-
-### 3. Saúde Integral (Hapvida Ads)
-Tom: Racional, claro e estratégico.
-- Público: parceiros, anunciantes, gestores de saúde, médicos
-- Comunica com precisão e linguagem de negócios
-- Foco em resultados mensuráveis, escala e jornada do paciente
-
-Referências de linguagem aprovadas:
-- "Integre sua marca à decisão clínica e à jornada do paciente"
-- "Escala, dados e presença na jornada real do paciente"
-- "Ative sua marca no ecossistema Hapvida"
-
-Padrões: Headlines com posicionamento estratégico. CTA de negócio: "Fale com um especialista", "Conecte sua marca".
-
-## REGRAS GERAIS
-
-1. Nunca invente informações não fornecidas no briefing. Use [INSERIR: dado] quando faltar.
-2. Sempre inclua um CTA. Se não especificado, sugira o mais adequado.
-3. Respeite os limites de caracteres por canal.
-4. Não use emojis salvo em WhatsApp/redes sociais e apenas se o briefing pedir.
-5. Não use superlativos vazios como "o melhor", "incrível", "revolucionário".
-6. Não invente condições, preços ou datas.
-7. Sinalize quando houver necessidade de disclaimer legal.
-8. Todo copy é sugestão para aprovação humana. Não é final.
-
-## FORMATO DE ENTREGA
-
----
-VERTICAL: [nome]
-CANAL: [nome]
-OBJETIVO: [nome]
----
-
-VERSÃO A – [rótulo]
-
-[copy formatado]
-
----
-
-VERSÃO B – [rótulo]
-
-[copy formatado]
-
----
-
-OBSERVAÇÕES DO AGENTE:
-- [sinalizações relevantes]
-"""
-
-BRIEFING_TEMPLATE = """
-📋 *TEMPLATE DE BRIEFING*
-
-Cole e preencha abaixo:
-
-```
-Vertical: [ ] Clube de Vantagens  [ ] Cuidaê  [ ] Saúde Integral
-Canal: [ ] Banner  [ ] Social  [ ] E-mail  [ ] WhatsApp  [ ] Push  [ ] SMS
-Objetivo: [ ] Awareness  [ ] Conversão  [ ] Retenção  [ ] Engajamento
-Público: [ ] Beneficiário PF  [ ] RH/Empresa  [ ] Médico  [ ] Parceiro
-Parceiro ou produto: 
-Informações principais: 
-CTA desejado: 
-Observações: 
-```
 """
 
 WELCOME_MESSAGE = """
 👋 Olá! Sou o *HapvidaAds Copy Bot*.
-
-Gero copy para as três verticais do ecossistema Hapvida:
-• Clube de Vantagens
-• Cuidaê
-• Saúde Integral (Hapvida Ads)
 
 Seu acesso está sendo verificado. Aguarde a aprovação do administrador.
 """
@@ -159,9 +10,9 @@ WELCOME_APPROVED = """
 👋 Olá! Sou o *HapvidaAds Copy Bot*.
 
 Gero copy para as três verticais do ecossistema Hapvida:
-• Clube de Vantagens
-• Cuidaê
-• Saúde Integral (Hapvida Ads)
+- Clube de Vantagens
+- Cuidaê
+- Saúde Integral (Hapvida Ads)
 
 *Como usar:*
 1. Digite /briefing para receber o template
@@ -273,7 +124,6 @@ async def handle_approval(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    # Só o admin pode aprovar
     if query.from_user.id != ADMIN_ID:
         return
 
